@@ -1,0 +1,30 @@
+if(NOT DEFINED OUTPUT)
+  message(FATAL_ERROR "OUTPUT is required")
+endif()
+if(NOT DEFINED FIRMWARE_SOURCES)
+  message(FATAL_ERROR "FIRMWARE_SOURCES is required")
+endif()
+
+get_filename_component(_output_dir "${OUTPUT}" DIRECTORY)
+file(MAKE_DIRECTORY "${_output_dir}")
+file(WRITE "${OUTPUT}" "namespace {\n")
+
+foreach(firmware ${FIRMWARE_SOURCES})
+  get_filename_component(file_name "${firmware}" NAME_WE)
+  file(READ "${firmware}" hex_content HEX)
+  string(LENGTH "${hex_content}" hex_len)
+
+  set(binary_literal)
+  set(byte_count 0)
+  math(EXPR hex_last "${hex_len} - 2")
+  foreach(index RANGE 0 ${hex_last} 2)
+    string(SUBSTRING "${hex_content}" ${index} 2 hex_byte)
+    string(APPEND binary_literal "0x${hex_byte},")
+    math(EXPR byte_count "${byte_count} + 1")
+  endforeach()
+
+  file(APPEND "${OUTPUT}" "const unsigned char ${file_name} [] = {${binary_literal}};\n")
+  file(APPEND "${OUTPUT}" "constexpr unsigned int ${file_name}_len = ${byte_count};\n\n")
+endforeach()
+
+file(APPEND "${OUTPUT}" "} // namespace\n")
