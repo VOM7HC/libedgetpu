@@ -79,10 +79,12 @@ Repeat compilation.
 
 The CMake build mirrors the non-Bazel Linux build and produces the same shared libraries (`direct` and optional `throttled`).
 
-Install dependencies:
+Install dependencies (Linux example):
 ```
 sudo apt install cmake pkg-config libabsl-dev libflatbuffers-dev libusb-1.0-0-dev flatbuffers-compiler
 ```
+
+For macOS and Windows, install equivalents of FlatBuffers (`flatc` + library), Abseil, and libusb, then make them discoverable to CMake (for example via `CMAKE_PREFIX_PATH` or toolchain integration such as vcpkg).
 
 Clone TensorFlow and checkout a matching version:
 ```

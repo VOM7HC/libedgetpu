@@ -27,27 +27,56 @@ if(NOT FLATC_EXECUTABLE)
   message(FATAL_ERROR "flatc not found. Install flatbuffers-compiler or set FLATC_EXECUTABLE.")
 endif()
 
-find_library(FLATBUFFERS_LIB flatbuffers REQUIRED)
-set(ABSL_REQUIRED_LIBS
-  absl_flags
-  absl_flags_internal
-  absl_flags_reflection
-  absl_flags_marshalling
-  absl_hash
-  absl_hashtablez_sampler
-  absl_raw_hash_set
-  absl_str_format_internal
-)
-set(ABSL_LIBRARIES)
-foreach(lib ${ABSL_REQUIRED_LIBS})
-  find_library(ABSL_LIB_${lib} ${lib} REQUIRED)
-  list(APPEND ABSL_LIBRARIES ${ABSL_LIB_${lib}})
-endforeach()
+set(EDGETPU_PUBLIC_DEP_INCLUDE_DIRS)
+set(EDGETPU_DEP_LIBRARIES)
+
+find_package(Flatbuffers CONFIG QUIET)
+if(TARGET flatbuffers::flatbuffers)
+  list(APPEND EDGETPU_DEP_LIBRARIES flatbuffers::flatbuffers)
+else()
+  find_library(FLATBUFFERS_LIB flatbuffers REQUIRED)
+  find_path(FLATBUFFERS_INCLUDE_DIR flatbuffers/flatbuffers.h REQUIRED)
+  list(APPEND EDGETPU_DEP_LIBRARIES ${FLATBUFFERS_LIB})
+  list(APPEND EDGETPU_PUBLIC_DEP_INCLUDE_DIRS ${FLATBUFFERS_INCLUDE_DIR})
+endif()
+
+find_package(absl CONFIG QUIET)
+if(TARGET absl::flags)
+  list(APPEND EDGETPU_DEP_LIBRARIES
+    absl::flags
+    absl::flags_internal
+    absl::flags_reflection
+    absl::flags_marshalling
+    absl::hash
+    absl::hashtablez_sampler
+    absl::raw_hash_set
+    absl::str_format_internal
+  )
+else()
+  set(ABSL_REQUIRED_LIBS
+    absl_flags
+    absl_flags_internal
+    absl_flags_reflection
+    absl_flags_marshalling
+    absl_hash
+    absl_hashtablez_sampler
+    absl_raw_hash_set
+    absl_str_format_internal
+  )
+  foreach(lib ${ABSL_REQUIRED_LIBS})
+    find_library(ABSL_LIB_${lib} ${lib} REQUIRED)
+    list(APPEND EDGETPU_DEP_LIBRARIES ${ABSL_LIB_${lib}})
+  endforeach()
+  find_path(ABSL_INCLUDE_DIR absl/types/optional.h REQUIRED)
+  list(APPEND EDGETPU_PUBLIC_DEP_INCLUDE_DIRS ${ABSL_INCLUDE_DIR})
+endif()
 
 set(LIBUSB_INCLUDE_DIRS)
 if(WIN32)
+  find_path(LIBUSB_INCLUDE_DIR NAMES libusb.h PATH_SUFFIXES libusb-1.0 REQUIRED)
   find_library(LIBUSB_LIBRARY NAMES libusb-1.0 REQUIRED)
   set(LIBUSB_LIBRARIES ${LIBUSB_LIBRARY})
+  set(LIBUSB_INCLUDE_DIRS ${LIBUSB_INCLUDE_DIR})
 else()
   find_package(PkgConfig REQUIRED)
   pkg_check_modules(LIBUSB REQUIRED libusb-1.0)
@@ -237,6 +266,7 @@ function(add_libedgetpu_target target_name throttle_enabled output_dir)
     ${TFROOT}
     ${LIBEDGETPU_BINARY_DIR}
     ${LIBUSB_INCLUDE_DIRS}
+    ${EDGETPU_PUBLIC_DEP_INCLUDE_DIRS}
   )
 
   if(WIN32)
@@ -245,8 +275,7 @@ function(add_libedgetpu_target target_name throttle_enabled output_dir)
   endif()
 
   target_link_libraries(${target_name} PRIVATE
-    ${FLATBUFFERS_LIB}
-    ${ABSL_LIBRARIES}
+    ${EDGETPU_DEP_LIBRARIES}
     ${LIBUSB_LIBRARIES}
   )
 
