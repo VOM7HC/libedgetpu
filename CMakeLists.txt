@@ -15,11 +15,25 @@ set(TFROOT "" CACHE PATH "Path to TensorFlow source root")
 if(NOT TFROOT)
   message(FATAL_ERROR "TFROOT must be set (e.g. -DTFROOT=/path/to/tensorflow)")
 endif()
-if(NOT EXISTS "${TFROOT}/tensorflow/lite/c/common.c")
-  message(FATAL_ERROR "Invalid TFROOT: ${TFROOT}/tensorflow/lite/c/common.c not found")
+
+find_path(TF_LITE_C_DIR
+  NAMES common.c
+  PATHS ${TFROOT}
+  PATH_SUFFIXES tensorflow/lite/c lite/c
+  NO_DEFAULT_PATH
+)
+if(NOT TF_LITE_C_DIR)
+  message(FATAL_ERROR "Invalid TFROOT: could not locate lite/c/common.c under ${TFROOT}")
 endif()
-if(NOT EXISTS "${TFROOT}/tensorflow/lite/util.cc")
-  message(FATAL_ERROR "Invalid TFROOT: ${TFROOT}/tensorflow/lite/util.cc not found")
+
+find_path(TF_LITE_DIR
+  NAMES util.cc
+  PATHS ${TFROOT}
+  PATH_SUFFIXES tensorflow/lite lite
+  NO_DEFAULT_PATH
+)
+if(NOT TF_LITE_DIR)
+  message(FATAL_ERROR "Invalid TFROOT: could not locate lite/util.cc under ${TFROOT}")
 endif()
 
 find_program(FLATC_EXECUTABLE flatc)
@@ -131,7 +145,7 @@ add_custom_target(libedgetpu_generated_headers
 )
 
 set(LIBEDGETPU_C_SRCS
-  ${TFROOT}/tensorflow/lite/c/common.c
+  ${TF_LITE_C_DIR}/common.c
 )
 
 set(LIBEDGETPU_COMMON_CXX_SRCS
@@ -204,7 +218,7 @@ set(LIBEDGETPU_COMMON_CXX_SRCS
   tflite/edgetpu_c.cc
   tflite/edgetpu_delegate_for_custom_op.cc
   tflite/edgetpu_delegate_for_custom_op_tflite_plugin.cc
-  ${TFROOT}/tensorflow/lite/util.cc
+  ${TF_LITE_DIR}/util.cc
 )
 
 set(LIBEDGETPU_PLATFORM_SRCS)
