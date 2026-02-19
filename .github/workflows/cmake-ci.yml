@@ -1,0 +1,82 @@
+name: CMake CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+jobs:
+  build:
+    name: cmake-${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14, windows-2022]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Show system CMake version (must be 3.x)
+        shell: bash
+        run: |
+          cmake --version
+          test "$(cmake --version | head -n1 | awk '{print $3}' | cut -d. -f1)" = "3"
+
+      - name: Install Linux dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            ninja-build \
+            pkg-config \
+            libabsl-dev \
+            libflatbuffers-dev \
+            libusb-1.0-0-dev \
+            flatbuffers-compiler
+
+      - name: Install macOS dependencies
+        if: runner.os == 'macOS'
+        run: |
+          brew update
+          brew install ninja pkg-config abseil flatbuffers libusb
+
+      - name: Setup MSVC dev shell
+        if: runner.os == 'Windows'
+        uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Install Windows dependencies (vcpkg)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          git clone --depth 1 https://github.com/microsoft/vcpkg.git "$env:RUNNER_TEMP\vcpkg"
+          & "$env:RUNNER_TEMP\vcpkg\bootstrap-vcpkg.bat"
+          & "$env:RUNNER_TEMP\vcpkg\vcpkg.exe" install abseil:x64-windows flatbuffers:x64-windows libusb:x64-windows ninja:x64-windows
+          "VCPKG_ROOT=$env:RUNNER_TEMP\vcpkg" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Checkout TensorFlow source
+        shell: bash
+        run: |
+          git clone --depth 1 --branch v2.16.1 https://github.com/tensorflow/tensorflow "$RUNNER_TEMP/tensorflow"
+
+      - name: Configure (Linux/macOS)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          cmake -S . -B out/cmake \
+            -G Ninja \
+            -DTFROOT="$RUNNER_TEMP/tensorflow"
+
+      - name: Configure (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          cmake -S . -B out/cmake -G Ninja `
+            -DTFROOT="$env:RUNNER_TEMP/tensorflow" `
+            -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_ROOT\scripts\buildsystems\vcpkg.cmake"
+
+      - name: Build
+        shell: bash
+        run: |
+          cmake --build out/cmake --target libedgetpu libedgetpu-throttled --parallel
