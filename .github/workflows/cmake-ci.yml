@@ -61,28 +61,30 @@ jobs:
         shell: bash
         run: |
           git clone --depth 1 --branch v2.16.1 https://github.com/tensorflow/tensorflow "$RUNNER_TEMP/tensorflow-src"
-          if [ -f "$RUNNER_TEMP/tensorflow-src/tensorflow/lite/c/common.c" ]; then
-            echo "TFROOT_CI=$RUNNER_TEMP/tensorflow-src" >> "$GITHUB_ENV"
-          elif [ -f "$RUNNER_TEMP/tensorflow-src/lite/c/common.c" ]; then
-            echo "TFROOT_CI=$RUNNER_TEMP" >> "$GITHUB_ENV"
-          else
-            echo "Unable to locate TensorFlow lite/c/common.c after checkout"
-            find "$RUNNER_TEMP/tensorflow-src" -maxdepth 4 -type f | head -n 40
+          COMMON_C_PATH=$(find "$RUNNER_TEMP/tensorflow-src" -path '*/tensorflow/lite/c/common.c' -print -quit)
+          if [ -z "$COMMON_C_PATH" ]; then
+            echo "Unable to locate TensorFlow tensorflow/lite/c/common.c after checkout"
+            find "$RUNNER_TEMP/tensorflow-src" -maxdepth 4 -type d | head -n 80
             exit 1
           fi
+          TFROOT_DIR=$(dirname "$(dirname "$(dirname "$COMMON_C_PATH")")")
+          echo "TFROOT_CI=$TFROOT_DIR" >> "$GITHUB_ENV"
 
       - name: Checkout TensorFlow source (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
           git clone --depth 1 --branch v2.16.1 https://github.com/tensorflow/tensorflow "$env:RUNNER_TEMP\tensorflow-src"
-          if (Test-Path "$env:RUNNER_TEMP\tensorflow-src\tensorflow\lite\c\common.c") {
-            "TFROOT_CI=$env:RUNNER_TEMP\tensorflow-src" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-          } elseif (Test-Path "$env:RUNNER_TEMP\tensorflow-src\lite\c\common.c") {
-            "TFROOT_CI=$env:RUNNER_TEMP" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-          } else {
-            Write-Error "Unable to locate TensorFlow lite/c/common.c after checkout"
+          $common = Get-ChildItem -Path "$env:RUNNER_TEMP\tensorflow-src" -Filter common.c -Recurse -File |
+            Where-Object { (($_.FullName -replace '\\','/') -match '/tensorflow/lite/c/common\.c$') } |
+            Select-Object -First 1
+          if (-not $common) {
+            Write-Error "Unable to locate TensorFlow tensorflow/lite/c/common.c after checkout"
+            Get-ChildItem -Path "$env:RUNNER_TEMP\tensorflow-src" -Directory -Recurse | Select-Object -First 80 | ForEach-Object { $_.FullName }
+            exit 1
           }
+          $tfroot = Split-Path -Path (Split-Path -Path (Split-Path -Path $common.FullName -Parent) -Parent) -Parent
+          "TFROOT_CI=$tfroot" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
       - name: Show resolved TFROOT
         shell: bash
