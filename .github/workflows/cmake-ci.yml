@@ -56,10 +56,38 @@ jobs:
           & "$env:RUNNER_TEMP\vcpkg\vcpkg.exe" install abseil:x64-windows flatbuffers:x64-windows libusb:x64-windows
           "VCPKG_ROOT=$env:RUNNER_TEMP\vcpkg" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
-      - name: Checkout TensorFlow source
+      - name: Checkout TensorFlow source (Linux/macOS)
+        if: runner.os != 'Windows'
         shell: bash
         run: |
-          git clone --depth 1 --branch v2.16.1 https://github.com/tensorflow/tensorflow "$RUNNER_TEMP/tensorflow"
+          git clone --depth 1 --branch v2.16.1 https://github.com/tensorflow/tensorflow "$RUNNER_TEMP/tensorflow-src"
+          if [ -f "$RUNNER_TEMP/tensorflow-src/tensorflow/lite/c/common.c" ]; then
+            echo "TFROOT_CI=$RUNNER_TEMP/tensorflow-src" >> "$GITHUB_ENV"
+          elif [ -f "$RUNNER_TEMP/tensorflow-src/lite/c/common.c" ]; then
+            echo "TFROOT_CI=$RUNNER_TEMP" >> "$GITHUB_ENV"
+          else
+            echo "Unable to locate TensorFlow lite/c/common.c after checkout"
+            find "$RUNNER_TEMP/tensorflow-src" -maxdepth 4 -type f | head -n 40
+            exit 1
+          fi
+
+      - name: Checkout TensorFlow source (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          git clone --depth 1 --branch v2.16.1 https://github.com/tensorflow/tensorflow "$env:RUNNER_TEMP\tensorflow-src"
+          if (Test-Path "$env:RUNNER_TEMP\tensorflow-src\tensorflow\lite\c\common.c") {
+            "TFROOT_CI=$env:RUNNER_TEMP\tensorflow-src" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          } elseif (Test-Path "$env:RUNNER_TEMP\tensorflow-src\lite\c\common.c") {
+            "TFROOT_CI=$env:RUNNER_TEMP" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          } else {
+            Write-Error "Unable to locate TensorFlow lite/c/common.c after checkout"
+          }
+
+      - name: Show resolved TFROOT
+        shell: bash
+        run: |
+          echo "TFROOT_CI=$TFROOT_CI"
 
       - name: Configure (Linux/macOS)
         if: runner.os != 'Windows'
@@ -67,14 +95,14 @@ jobs:
         run: |
           cmake -S . -B out/cmake \
             -G Ninja \
-            -DTFROOT="$RUNNER_TEMP/tensorflow"
+            -DTFROOT="$TFROOT_CI"
 
       - name: Configure (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
           cmake -S . -B out/cmake -G Ninja `
-            -DTFROOT="$env:RUNNER_TEMP/tensorflow" `
+            -DTFROOT="$env:TFROOT_CI" `
             -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_ROOT\scripts\buildsystems\vcpkg.cmake"
 
       - name: Build
