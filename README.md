@@ -6,10 +6,11 @@ This software is distributed in the binary form at [coral.ai/software](https://c
 
 ## Building
 
-There are three ways to build libedgetpu:
+There are four ways to build libedgetpu:
 
 * Docker + Bazel: Compatible with Linux, MacOS and Windows (via Dockerfile.windows and build.bat), this method ensures a known-good build enviroment and pulls all external depedencies needed.
 * Bazel: Supports Linux, macOS, and Windows (via build.bat). A proper enviroment setup is required before using this technique.
+* CMake: Supports Linux native builds without Bazel by using system packages plus a TensorFlow source checkout.
 * Makefile: Supporting only Linux and Native builds, this strategy is pure Makefile and doesn't require Bazel or external dependencies to be pulled at runtime.
 
 ### Bazel + Docker [Recommended]
@@ -72,6 +73,41 @@ NOTE for MacOS: Compilation with MacOS fails. Two requirements:
 "darwin_x86_64": ":cc-compiler-darwin",
 ```
 Repeat compilation.
+
+
+### CMake
+
+The CMake build mirrors the non-Bazel Linux build and produces the same shared libraries (`direct` and optional `throttled`).
+
+Install dependencies:
+```
+sudo apt install cmake pkg-config libabsl-dev libflatbuffers-dev libusb-1.0-0-dev flatbuffers-compiler
+```
+
+Clone TensorFlow and checkout a matching version:
+```
+git clone https://github.com/tensorflow/tensorflow
+cd tensorflow
+git checkout v2.16.1
+```
+
+Configure and build from this repository (Linux/macOS):
+```
+cmake -S . -B out/cmake -DTFROOT=<Directory of Tensorflow>
+cmake --build out/cmake -j$(nproc) --target libedgetpu libedgetpu-throttled
+```
+
+Configure and build on Windows (Developer Command Prompt):
+```
+cmake -S . -B out\cmake -DTFROOT=<Directory of Tensorflow>
+cmake --build out\cmake --config Release --target libedgetpu libedgetpu-throttled
+```
+
+Artifacts are emitted to:
+- `out/cmake/direct/k8/libedgetpu.so.1.0` (Linux)
+- `out/cmake/direct/k8/libedgetpu.dylib` (macOS)
+- `out/cmake/direct/k8/edgetpu.dll` (Windows)
+- throttled variants under `out/cmake/throttled/k8/` when `-DEDGETPU_BUILD_THROTTLED=ON` (default)
 
 ### Makefile
 
